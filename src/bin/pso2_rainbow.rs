@@ -1,5 +1,3 @@
-use std::iter;
-
 use self::models::*;
 use diesel::prelude::*;
 use itertools::Itertools;
@@ -20,21 +18,14 @@ fn main() {
         println!("{:?}:{}", hash.md5, hash.filename);
     }
 
-    let min_length = 1;
-    let max_length = 2;
-    let strings = (min_length..max_length + 1).fold(
-        Box::new(iter::empty::<String>()) as Box<dyn Iterator<Item = String>>,
-        |it, n| {
-            Box::new(
-                it.chain(
-                    CHARSET
-                        .chars()
-                        .permutations(n)
-                        .map(|v| v.into_iter().collect::<String>()),
-                ),
-            )
-        },
-    );
+    let min_length = 4;
+    let max_length = 5;
+    let strings = (min_length..max_length + 1).flat_map(|n| {
+        CHARSET
+            .chars()
+            .permutations(n)
+            .map(|v| v.into_iter().collect::<String>())
+    });
     for string in strings {
         println!("{}", string)
     }
