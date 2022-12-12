@@ -20,13 +20,19 @@ fn main() {
         println!("{:?}:{}", hash.md5, hash.filename);
     }
 
-    let strings = (1..3).fold(
+    let min_length = 1;
+    let max_length = 2;
+    let strings = (min_length..max_length + 1).fold(
         Box::new(iter::empty::<String>()) as Box<dyn Iterator<Item = String>>,
         |it, n| {
-            Box::new(it.chain(CHARSET.chars().permutations(n).unique().map(|v| {
-                String::from_utf8(v.into_iter().map(|c| c as u8).collect_vec())
-                    .expect("ASCII char tuples should always resolve to an owned string")
-            })))
+            Box::new(
+                it.chain(
+                    CHARSET
+                        .chars()
+                        .permutations(n)
+                        .map(|v| v.into_iter().collect::<String>()),
+                ),
+            )
         },
     );
     for string in strings {
