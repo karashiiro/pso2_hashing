@@ -20,12 +20,8 @@ fn main() {
 
     let min_length = 4;
     let max_length = 5;
-    let strings = (min_length..max_length + 1).flat_map(|n| {
-        CHARSET
-            .chars()
-            .permutations(n)
-            .map(|v| v.into_iter().collect::<String>())
-    });
+    let strings = (min_length..max_length + 1)
+        .flat_map(|n| CHARSET.chars().permutations(n).map(String::from_iter));
     for string in strings {
         println!("{}", string)
     }
