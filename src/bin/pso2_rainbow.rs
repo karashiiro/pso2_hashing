@@ -2,7 +2,7 @@ use generic_array::typenum::U16;
 use generic_array::GenericArray;
 use itertools::Itertools;
 use md5::{Digest, Md5};
-use pso2_rainbow::*;
+use pso2_rainbow::{models::NewHashMapping, *};
 use rayon::prelude::*;
 use tokio::runtime::Builder;
 
@@ -35,15 +35,23 @@ fn main() {
             .map(hash_chars)
             .collect_into_vec(hashes);
 
-        let handles = &mut Vec::with_capacity(100000);
-        for (hash, filename) in hashes {
-            let hash = hash.to_owned();
-            let filename = filename.to_owned();
+        let handles = &mut Vec::with_capacity(100);
+        for batch in hashes.chunks(1000) {
+            let batch = batch.to_owned();
             let mut connection = connection_pool
                 .get()
                 .expect("expected a connection from the connection pool");
             handles.push(runtime.spawn(async move {
-                create_hash_mapping(&mut connection, &hash, &filename);
+                create_hash_mappings(
+                    &mut connection,
+                    &batch
+                        .into_iter()
+                        .map(|(hash, filename)| NewHashMapping {
+                            md5: hash.to_vec(),
+                            filename,
+                        })
+                        .collect_vec(),
+                );
             }));
         }
 

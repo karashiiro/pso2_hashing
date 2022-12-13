@@ -3,7 +3,6 @@ pub mod schema;
 
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::result::Error::DatabaseError;
 use dotenvy::dotenv;
 use models::NewHashMapping;
 use std::env;
@@ -19,14 +18,12 @@ pub fn get_connection_pool() -> Pool<ConnectionManager<PgConnection>> {
         .expect("could not build connection pool")
 }
 
-pub fn create_hash_mapping(conn: &mut PgConnection, hash: &[u8], filename: &str) {
+pub fn create_hash_mappings(conn: &mut PgConnection, hashes: &[NewHashMapping]) {
     use crate::schema::hash_mapping;
 
     diesel::insert_into(hash_mapping::table)
-        .values(&NewHashMapping {
-            md5: hash,
-            filename,
-        })
+        .values(hashes)
+        .on_conflict_do_nothing()
         .execute(conn)
         .unwrap_or_else(|e| {
             process_error(e);
@@ -35,11 +32,5 @@ pub fn create_hash_mapping(conn: &mut PgConnection, hash: &[u8], filename: &str)
 }
 
 fn process_error(e: diesel::result::Error) {
-    match e {
-        DatabaseError(kind, info) => match kind {
-            diesel::result::DatabaseErrorKind::UniqueViolation => (),
-            _ => println!("{:?}", info),
-        },
-        e => println!("{:?}", e),
-    }
+    println!("{:?}", e)
 }

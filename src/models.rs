@@ -7,9 +7,9 @@ pub struct HashMapping {
     pub filename: String,
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, Clone)]
 #[diesel(table_name = hash_mapping)]
-pub struct NewHashMapping<'a> {
-    pub md5: &'a [u8],
-    pub filename: &'a str,
+pub struct NewHashMapping {
+    pub md5: Vec<u8>,
+    pub filename: String,
 }
