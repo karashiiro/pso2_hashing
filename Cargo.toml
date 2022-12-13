@@ -8,7 +8,11 @@ edition = "2021"
 [dependencies]
 diesel = { version = "2.0.0", features = ["postgres"] }
 dotenvy = "0.15"
+generic-array = "0.14.6"
+hex = "0.4.3"
 itertools = "0.10.5"
+md-5 = "0.10.5"
+rayon = "1.6.1"
 
 [[bin]]
 name = "pso2_rainbow"
