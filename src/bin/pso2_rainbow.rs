@@ -20,13 +20,15 @@ fn main() {
 
     let connection_pool = get_connection_pool();
 
+    // Build input strings
     let min_length = 4;
     let max_length = 10;
     let suffix = ".ice".chars().collect_vec();
-    let hash_chunks = (min_length - suffix.len()..max_length - suffix.len() + 1)
+    let plaintext_chunks = (min_length - suffix.len()..max_length - suffix.len() + 1)
         .flat_map(|n| CHARSET.chars().permutations(n))
         .chunks(100000);
-    for chunk in &hash_chunks {
+    for chunk in &plaintext_chunks {
+        // Hash the input strings in parallel
         let hashes = &mut Vec::with_capacity(100000);
         chunk
             .collect_vec()
@@ -35,6 +37,7 @@ fn main() {
             .map(hash_chars)
             .collect_into_vec(hashes);
 
+        // Batch-insert the hashes into the database
         let handles = &mut Vec::with_capacity(100);
         for batch in hashes.chunks(1000) {
             let batch = batch.to_owned();
