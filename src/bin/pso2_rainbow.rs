@@ -21,7 +21,7 @@ fn main() {
     let connection_pool = get_connection_pool();
 
     let min_length = 4;
-    let max_length = 8;
+    let max_length = 10;
     let suffix = ".ice".chars().collect_vec();
     let hash_chunks = (min_length - suffix.len()..max_length - suffix.len() + 1)
         .flat_map(|n| CHARSET.chars().permutations(n))
