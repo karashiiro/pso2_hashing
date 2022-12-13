@@ -38,8 +38,8 @@ fn main() {
             .collect_into_vec(hashes);
 
         // Batch-insert the hashes into the database
-        let handles = &mut Vec::with_capacity(100);
-        for batch in hashes.chunks(1000) {
+        let handles = &mut Vec::with_capacity(10);
+        for batch in hashes.chunks(10000) {
             let batch = batch.to_owned();
             let mut connection = connection_pool
                 .get()
