@@ -2,7 +2,7 @@ use generic_array::typenum::U16;
 use generic_array::GenericArray;
 use itertools::Itertools;
 use md5::{Digest, Md5};
-use pso2_rainbow::{models::NewHashMapping, *};
+// use pso2_rainbow::{models::NewHashMapping, *};
 use rayon::prelude::*;
 use tokio::runtime::Builder;
 
@@ -20,6 +20,7 @@ where
 {
     charset
         .into_iter()
+        .flat_map(|n| std::iter::repeat(n).take(grapheme_size))
         .permutations(grapheme_size)
         .filter_map(|chars| {
             let s = String::from_iter(chars);
@@ -35,12 +36,12 @@ where
 fn main() {
     let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
 
-    let connection_pool = get_connection_pool();
+    // let connection_pool = get_connection_pool();
 
     // Build valid graphemes to minimize set of generated strings
     let grapheme_length = 2;
     let graphemes = build_graphemes(&CHARSET.chars().collect_vec(), grapheme_length, |s| {
-        !s.contains("/_") && !s.contains("_/")
+        !s.contains("/_") && !s.contains("_/") && !s.contains("//") && !s.contains("__")
     });
 
     // Known file prefixes and suffixes
@@ -56,8 +57,10 @@ fn main() {
         String::from("enemy/"),
         String::from("interface/"),
         String::from("lobby_action/"),
+        String::from("object/"),
         String::from("section_fence/"),
         String::from("set/"),
+        String::from("stage/"),
     ];
     let suffixes = vec![String::from(".ice"), String::from(".cpk")];
 
@@ -101,28 +104,28 @@ fn main() {
             .collect_into_vec(hashes);
 
         // Batch-insert the hashes into the database
-        let handles = &mut Vec::with_capacity(10);
-        for batch in hashes.chunks(10000) {
-            let batch = batch.to_owned();
-            let mut connection = connection_pool
-                .get()
-                .expect("expected a connection from the connection pool");
-            handles.push(runtime.spawn(async move {
-                create_hash_mappings(
-                    &mut connection,
-                    &batch
-                        .into_iter()
-                        .map(|(hash, filename)| NewHashMapping {
-                            md5: hash.to_vec(),
-                            filename,
-                        })
-                        .collect_vec(),
-                );
-            }));
-        }
+        // let handles = &mut Vec::with_capacity(10);
+        // for batch in hashes.chunks(10000) {
+        //     let batch = batch.to_owned();
+        //     let mut connection = connection_pool
+        //         .get()
+        //         .expect("expected a connection from the connection pool");
+        //     handles.push(runtime.spawn(async move {
+        //         create_hash_mappings(
+        //             &mut connection,
+        //             &batch
+        //                 .into_iter()
+        //                 .map(|(hash, filename)| NewHashMapping {
+        //                     md5: hash.to_vec(),
+        //                     filename,
+        //                 })
+        //                 .collect_vec(),
+        //         );
+        //     }));
+        // }
 
-        for handle in handles {
-            runtime.block_on(handle).unwrap();
-        }
+        // for handle in handles {
+        //     runtime.block_on(handle).unwrap();
+        // }
     }
 }
