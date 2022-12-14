@@ -6,13 +6,30 @@ use pso2_rainbow::{models::NewHashMapping, *};
 use rayon::prelude::*;
 use tokio::runtime::Builder;
 
-const CHARSET: &str = "abcdefghijklmnopqrstuvwxyz0123456789/_.";
+const CHARSET: &str = "abcdefghijklmnopqrstuvwxyz0123456789/_";
 
-fn hash_chars(chars: Vec<char>) -> (GenericArray<u8, U16>, String) {
-    let string = String::from_iter(chars);
+fn hash_string(string: &str) -> GenericArray<u8, U16> {
     let mut hasher = Md5::new();
-    hasher.update(string.clone());
-    (hasher.finalize(), string)
+    hasher.update(string.chars().map(|c| c as u8).collect_vec());
+    hasher.finalize()
+}
+
+fn build_graphemes<F>(charset: &[char], grapheme_size: usize, filter: F) -> Vec<String>
+where
+    F: Fn(&str) -> bool,
+{
+    charset
+        .into_iter()
+        .permutations(grapheme_size)
+        .filter_map(|chars| {
+            let s = String::from_iter(chars);
+            if filter(&s) {
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .collect_vec()
 }
 
 fn main() {
@@ -20,21 +37,67 @@ fn main() {
 
     let connection_pool = get_connection_pool();
 
+    // Build valid graphemes to minimize set of generated strings
+    let grapheme_length = 2;
+    let graphemes = build_graphemes(&CHARSET.chars().collect_vec(), grapheme_length, |s| {
+        !s.contains("/_") && !s.contains("_/")
+    });
+
+    // Known file prefixes and suffixes
+    let prefixes = vec![
+        String::from(""),
+        String::from("it_"),
+        String::from("sy_"),
+        String::from("ui_"),
+        String::from("actor/"),
+        String::from("apc/"),
+        String::from("character/"),
+        String::from("character/motion"),
+        String::from("enemy/"),
+        String::from("interface/"),
+        String::from("lobby_action/"),
+        String::from("section_fence/"),
+        String::from("set/"),
+    ];
+    let suffixes = vec![String::from(".ice"), String::from(".cpk")];
+
     // Build input strings
-    let min_length = 4;
-    let max_length = 10;
-    let suffix = ".ice".chars().collect_vec();
-    let plaintext_chunks = (min_length - suffix.len()..max_length - suffix.len() + 1)
-        .flat_map(|n| CHARSET.chars().permutations(n))
+    let permuted_min_length = 0 / grapheme_length;
+    let permuted_max_length = 6 / grapheme_length;
+
+    println!(
+        "Strings to generate: {}",
+        prefixes.len()
+            * suffixes.len()
+            * CHARSET
+                .len()
+                .pow((permuted_max_length - permuted_min_length) as u32)
+    );
+
+    let plaintext_chunks = prefixes
+        .into_iter()
+        .cartesian_product(
+            (permuted_min_length..permuted_max_length + 1)
+                .flat_map(|n| graphemes.clone().into_iter().permutations(n))
+                .cartesian_product(suffixes.into_iter()),
+        )
         .chunks(100000);
+
     for chunk in &plaintext_chunks {
         // Hash the input strings in parallel
         let hashes = &mut Vec::with_capacity(100000);
         chunk
             .collect_vec()
             .par_iter()
-            .map(|chars| [chars.clone(), suffix.clone()].concat())
-            .map(hash_chars)
+            .map(|(prefix, (g, suffix))| {
+                [vec![prefix.clone()], g.clone(), vec![suffix.clone()]]
+                    .into_iter()
+                    .concat()
+                    .into_iter()
+                    .reduce(|accum, item| accum + &item)
+                    .expect("iterator should not be empty")
+            })
+            .map(|s| (hash_string(&s), s))
             .collect_into_vec(hashes);
 
         // Batch-insert the hashes into the database
