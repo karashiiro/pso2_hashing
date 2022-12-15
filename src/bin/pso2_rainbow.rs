@@ -6,6 +6,7 @@ use md5::{Digest, Md5};
 use pso2_rainbow::{models::NewHashMapping, *};
 use rayon::prelude::*;
 use tokio::runtime::Builder;
+use uuid::Uuid;
 
 // '/' is handled by prefixes, so it's not included in the charset here.
 // 'qwyz_' is being removed to reduce complexity temporarily.
@@ -44,6 +45,15 @@ where
             }
         })
         .collect_vec()
+}
+
+fn validate_permutation_bounds(min: usize, max: usize, grapheme_max: usize) -> (usize, usize) {
+    debug_assert!(max >= min);
+    debug_assert!(min % grapheme_max == 0);
+    debug_assert!(max % grapheme_max == 0);
+    let min = min / grapheme_max;
+    let max = max / grapheme_max;
+    (min, max)
 }
 
 fn main() {
@@ -172,17 +182,12 @@ fn main() {
     println!("Suffixes: {}", suffixes.len());
 
     // Build input strings
-    let permuted_min_length = 0;
-    let permuted_max_length = 6;
-    debug_assert!(permuted_max_length >= permuted_min_length);
-    debug_assert!(permuted_min_length % grapheme_max_length == 0);
-    debug_assert!(permuted_max_length % grapheme_max_length == 0);
-    let permuted_min_length = permuted_min_length / grapheme_max_length;
-    let permuted_max_length = permuted_max_length / grapheme_max_length;
+    let (permuted_min_len, permuted_max_len) = validate_permutation_bounds(0, 6, grapheme_max_length);
+    let graphemes_per_str = permuted_max_len - permuted_min_len;
 
     println!(
         "Graphemes per string: {}",
-        permuted_max_length - permuted_min_length
+        graphemes_per_str
     );
     println!(
         "Strings to generate: {}",
@@ -190,23 +195,24 @@ fn main() {
             * suffixes.len()
             * graphemes
                 .len()
-                .pow((permuted_max_length - permuted_min_length) as u32)
+                .pow(graphemes_per_str as u32)
     );
 
+    let plaintext_chunk_size = 100000;
     let plaintext_chunks = prefixes
         .into_iter()
         .cartesian_product(
             graphemes
                 .clone()
                 .into_iter()
-                .permutations(permuted_max_length - permuted_min_length)
+                .permutations(graphemes_per_str)
                 .cartesian_product(suffixes.into_iter()),
         )
-        .chunks(100000);
+        .chunks(plaintext_chunk_size);
 
+    let hashes = &mut Vec::with_capacity(plaintext_chunk_size);
     for chunk in &plaintext_chunks {
         // Hash the input strings in parallel
-        let hashes = &mut Vec::with_capacity(100000);
         chunk
             .collect_vec()
             .par_iter()
@@ -222,8 +228,9 @@ fn main() {
             .collect_into_vec(hashes);
 
         // Batch-insert the hashes into the database
-        let handles = &mut Vec::with_capacity(10);
-        for batch in hashes.chunks(10000) {
+        let handle_count = 10;
+        let handles = &mut Vec::with_capacity(handle_count);
+        for batch in hashes.chunks(plaintext_chunk_size / handle_count) {
             let batch = batch.to_owned();
             let mut connection = connection_pool
                 .get()
@@ -234,7 +241,7 @@ fn main() {
                     &batch
                         .into_iter()
                         .map(|(hash, filename)| NewHashMapping {
-                            md5: hash.to_vec(),
+                            md5: Uuid::from_bytes(hash.into()),
                             filename,
                         })
                         .collect_vec(),
