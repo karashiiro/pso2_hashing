@@ -3,7 +3,11 @@ use generic_array::GenericArray;
 use itertools::Itertools;
 use lazy_regex::regex_is_match;
 use md5::{Digest, Md5};
-use pso2_rainbow::{models::NewHashMapping, *};
+use pso2_rainbow::{
+    models::NewHashMapping,
+    rainbow_table::{build_graphemes, validate_permutation_bounds},
+    *,
+};
 use rayon::prelude::*;
 use tokio::runtime::Builder;
 use uuid::Uuid;
@@ -18,55 +22,12 @@ fn hash_string(string: &str) -> GenericArray<u8, U16> {
     hasher.finalize()
 }
 
-fn build_graphemes<F>(charset: &[char], grapheme_size: usize, filter: F) -> Vec<String>
-where
-    F: Fn(&str) -> bool,
-{
-    (0..grapheme_size + 1)
-        .flat_map(|n| {
-            charset
-                .into_iter()
-                // Removing this causes chars to not be duplicated when they should be.
-                // However, this also produces every single permutation twice.
-                .flat_map(move |m| std::iter::repeat(m).take(n))
-                .permutations(n)
-                // Hence the filter :)
-                // This can be fixed properly once it causes performance issues. Taking
-                // the Cartesian product of the charset with itself `n` times is the correct
-                // way to do this, but that's gross to do because of itertools types.
-                .unique()
-        })
-        .filter_map(|chars| {
-            let s = String::from_iter(chars);
-            if filter(&s) {
-                Some(s)
-            } else {
-                None
-            }
-        })
-        .collect_vec()
-}
-
-fn validate_permutation_bounds(min: usize, max: usize, grapheme_max: usize) -> (usize, usize) {
-    debug_assert!(max >= min);
-    debug_assert!(min % grapheme_max == 0);
-    debug_assert!(max % grapheme_max == 0);
-    let min = min / grapheme_max;
-    let max = max / grapheme_max;
-    (min, max)
-}
-
 fn main() {
     let runtime = Builder::new_multi_thread().enable_all().build().unwrap();
 
     let connection_pool = get_connection_pool();
 
-    // Build valid graphemes to minimize set of generated strings.
-    // The larger the grapheme length is, the more time will be spent generating
-    // graphemes (duh). However, filtering out more illegal graphemes ahead of time
-    // will result in far fewer hashes needing to be generated.
     let grapheme_max_length = 3;
-    debug_assert!(grapheme_max_length >= 1);
     let graphemes = build_graphemes(&CHARSET.chars().collect_vec(), grapheme_max_length, |s| {
         // This regex matches the following sequences:
         // - 2+ consecutive '_'
@@ -182,20 +143,14 @@ fn main() {
     println!("Suffixes: {}", suffixes.len());
 
     // Build input strings
-    let (permuted_min_len, permuted_max_len) = validate_permutation_bounds(0, 6, grapheme_max_length);
+    let (permuted_min_len, permuted_max_len) =
+        validate_permutation_bounds(0, 6, grapheme_max_length);
     let graphemes_per_str = permuted_max_len - permuted_min_len;
 
-    println!(
-        "Graphemes per string: {}",
-        graphemes_per_str
-    );
+    println!("Graphemes per string: {}", graphemes_per_str);
     println!(
         "Strings to generate: {}",
-        prefixes.len()
-            * suffixes.len()
-            * graphemes
-                .len()
-                .pow(graphemes_per_str as u32)
+        prefixes.len() * suffixes.len() * graphemes.len().pow(graphemes_per_str as u32)
     );
 
     let plaintext_chunk_size = 100000;
