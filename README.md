@@ -1,1 +1,1 @@
-# pso2_rainbow
+# pso2_hashing
