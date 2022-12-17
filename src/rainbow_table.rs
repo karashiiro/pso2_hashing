@@ -99,16 +99,29 @@ impl PlaintextGenerator {
 
     fn get(&self, i: u64) -> String {
         // The index of a particular permutation P can be represented by a tuple
-        // (pi, si, G), where pi and si are the indices of the prefix and
-        // suffix, and G is a tuple of the indices of the graphemes used to
-        // produce the final string. Given this tuple (pi, si, G), the index can
+        // (pi, si, Gi), where pi and si are the indices of the prefix and
+        // suffix, and Gi is a tuple of the indices of the graphemes used to
+        // produce the final string. Given this tuple (pi, si, Gi), the index can
         // be converted into a single value by computing:
         //
-        // a = pi + si * p_max
-        // i = a + G * s_max
+        // wi = pi + si * p_max
+        // i = gi + wi * g_max
         //
-        // a represents the 1-dimensional index of (pi, si) on the 2-dimensional
-        // plane (p, s) of prefixes and suffixes (TODO finish this)
+        // wi represents the 1-dimensional index of (pi, si) on the 2-dimensional
+        // plane (p, s) of prefixes and suffixes, gi is the collapsed index of Gi
+        // in the grapheme space, and g_max is the collapsed size of the
+        // dimensions of G.
+        //
+        // An n-dimensional G can be collapsed onto a single dimension by
+        // recursively performing single-dimension reductions over the bounds of
+        // the space of G. This operation can be simplified because the size of
+        // each dimension of G is the same. Put simply, n graphemes are taken
+        // from G, making the output space a cube.
+        //
+        // Finally, the w dimension (prefixes, suffixes) is treated as a
+        // dimension orthogonal to g, and the same operation is performed.
+        //
+        // This function performs all of these steps in reverse.
         String::from("")
     }
 }
